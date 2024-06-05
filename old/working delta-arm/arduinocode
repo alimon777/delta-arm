@@ -1,0 +1,90 @@
+#include <Servo.h>
+#define pA 110
+
+Servo servo1;
+Servo servo2;
+Servo servo3;
+
+int values[3] = {0};
+int currentIndex = 0;
+int sign = 1;
+int t1 = 110, t2 = 110, t3 = 110;
+
+void setup() {
+  Serial.begin(9600);
+  servo1.attach(3);
+  servo2.attach(5);
+  servo3.attach(6);
+  servo1.write(pA);
+  servo2.write(pA);
+  servo3.write(pA);
+  delay(1500);
+}
+
+void processString() {
+  String inputString = Serial.readStringUntil('\n');
+  bool inNumber = false;
+  String currentNumber = "";
+  for (int i = 0; i < inputString.length(); i++) {
+    char c = inputString[i];
+    if (c == '<') {
+      sign = 1;
+      inNumber = true;
+      currentIndex = 0;
+      currentNumber = "";
+    } else if (c == '>' && currentIndex == 2) {
+      inNumber = false;
+      values[currentIndex++] = sign * currentNumber.toInt();
+      sign = 1;
+      break;
+    } else if (inNumber) {
+      if (c == ',') {
+        values[currentIndex++] = sign * currentNumber.toInt();
+        sign = 1;
+        currentNumber = "";
+      } else if (isdigit(c)) {
+        currentNumber += c;
+      } else if (c == '-' && (inputString[i - 1] == '<' || inputString[i - 1] == ',')) {
+        sign = -1;
+      } else {
+        currentIndex = 4;
+      }
+    }
+  }
+}
+
+int modAngle(int ang) {
+  ang = pA - ang;
+  if (ang < 10)
+    ang = 10;
+  if (ang > 160)
+    ang = 160;
+  return ang;
+}
+
+void sendAcknowledgment(int t1, int t2, int t3) {
+  Serial.print("<ACK>");
+  Serial.print(t1);
+  Serial.print(".");
+  Serial.print(t2);
+  Serial.print(".");
+  Serial.print(t3);
+  Serial.println();
+}
+
+void loop() {
+  if (Serial.available() > 0) {
+    processString();
+  }
+  if (currentIndex == 3) {
+    t1 = modAngle(values[0]);
+    t2 = modAngle(values[1]);
+    t3 = modAngle(values[2]);
+    sendAcknowledgment(t1, t2, t3);
+    // currentIndex = 0; // Reset currentIndex for the next message
+  }
+  servo1.write(t1);
+  servo2.write(t2);
+  servo3.write(t3);
+  delay(3000);
+}

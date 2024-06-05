@@ -1,0 +1,111 @@
+#include <Servo.h>
+#define pA 110
+#define mR 86 // resting postion after pickup
+
+Servo servo1;
+Servo servo2;
+Servo servo3;
+
+int values[4] = {0};
+int bin[4][3] = {{16,53,87},{37,22,99},{99,18,32},{81,47,7}}; //Can,HDPE,PET_Bottle,plastic_wrapper,Tetrapak bin angular  coordinates
+int currentIndex = 0;
+int sign = 1;
+int t1 = 110, t2 = 110, t3 = 110;
+
+void setup() {
+  Serial.begin(9600);
+  servo1.attach(3);
+  servo2.attach(5);
+  servo3.attach(6);
+  servo1.write(pA);
+  servo2.write(pA);
+  servo3.write(pA);
+  delay(1500);
+}
+
+void processString() {
+  String inputString = Serial.readStringUntil('\n');
+  bool inNumber = false;
+  String currentNumber = "";
+  for (int i = 0; i < inputString.length(); i++) {
+    char c = inputString[i];
+    if (c == '<') {
+      sign = 1;
+      inNumber = true;
+      currentIndex = 0;
+      currentNumber = "";
+    } else if (c == '>' && currentIndex == 3) {
+      inNumber = false;
+      values[currentIndex++] = sign * currentNumber.toInt();
+      sign = 1;
+      break;
+    } else if (inNumber) {
+      if (c == ',') {
+        values[currentIndex++] = sign * currentNumber.toInt();
+        sign = 1;
+        currentNumber = "";
+      } else if (isdigit(c)) {
+        currentNumber += c;
+      } else if (c == '-' && (inputString[i - 1] == '<' || inputString[i - 1] == ',')) {
+        sign = -1;
+      } else {
+        currentIndex = 5;
+      }
+    }
+  }
+}
+
+int modAngle(int ang) {
+  ang = pA - ang;
+  if (ang < 0)
+    ang = 0;
+  if (ang > 160)
+    ang = 160;
+  return ang;
+}
+
+void sendAcknowledgment(int t1, int t2, int t3, int b) {
+  Serial.print("<ACK>");
+  Serial.print(t1);
+  Serial.print(".");
+  Serial.print(t2);
+  Serial.print(".");
+  Serial.print(t3);
+  Serial.print(".");
+  Serial.print(b);
+  Serial.println();
+}
+
+void loop() {
+  if (Serial.available() > 0) {
+    processString();
+  }
+  if (currentIndex == 4) {
+    t1 = modAngle(values[0]);
+    t2 = modAngle(values[1]);
+    t3 = modAngle(values[2]);
+    int b = values[3];
+    delay(1000);
+    servo1.write(t1);
+    servo2.write(t2);
+    servo3.write(t3);
+    delay(3000);
+    servo1.write(mR);
+    servo2.write(mR);
+    servo3.write(mR);
+    delay(3000);
+    servo1.write(bin[b][0]);
+    servo2.write(bin[b][1]);
+    servo3.write(bin[b][2]);
+    delay(1500);
+    currentIndex=0;
+    sendAcknowledgment(t1, t2, t3, b);
+  }
+  delay(3000);
+  servo1.write(pA);
+  servo2.write(pA);
+  servo3.write(pA);
+  // servo1.write(t1);
+  // servo2.write(t2);
+  // servo3.write(t3);
+}
